@@ -147,6 +147,19 @@
            (save-excursion (end-of-line) (point)))))
   )
 
+(cond ((fboundp 'point-at-bol)
+       (defalias 'matlab-point-at-bol 'point-at-bol)
+       (defalias 'matlab-point-at-eol 'point-at-eol))
+      ;; Emacs 20.4
+      ((fboundp 'line-beginning-position)
+       (defalias 'matlab-point-at-bol 'line-beginning-position)
+       (defalias 'matlab-point-at-eol 'line-end-position))
+      (t
+       (defmacro matlab-point-at-bol ()
+	 (save-excursion (beginning-of-line) (point)))
+       (defmacro matlab-point-at-eol ()
+	 (save-excursion (end-of-line) (point)))))
+
 (defmacro matlab-run-in-matlab-mode-only (&rest body)
   "Execute BODY only if the active buffer is a MATLAB(R) M-file buffer."
   `(if (eq major-mode 'matlab-mode)
@@ -729,7 +742,7 @@ If font lock is not loaded, lay in wait."
   "Regexp used to find a character that starts a char vector or string.
 This remembers what chart was matched via index 9.")
 
-(defvar matlab-string-start-regexp "\\(^\\|[^]})a-zA-Z0-9_.'\"]\\)"
+(defvar matlab-string-start-regexp "\\(^\\|[^]})a-zA-Z0-9_.']\\)"
   "Regexp used to represent the character before the string char '.
 The ' character has restrictions on what starts a string which is needed
 when attempting to understand the current context.")
@@ -741,10 +754,10 @@ when attempting to understand the current context.")
 Stops matching when end of line, or end of that char vector or string is met.
 depends on `matlab-string-char-regexp' being at the beginning of a compound expression.")
 
-(defvar matlab-string-end-regexp (concat matlab-string-content-regexp "\\9")
-  "Regexp used to represent the character pattern for ending a char vector or string.
-This depends on `matlab-string-char-regexp' being used earlier to specify what
-\9 represents (ie - either ' or \").")
+(defvar matlab-string-end-regexp "[^'\n]*\\(''[^'\n]*\\)*'"
+  "Regexp used to represent the character pattern for ending a string.
+The ' character can be used as a transpose, and can transpose transposes.
+Therefore, to end, we must check all that goop.")
 
 (defun matlab-match-string-end-for-string ()
   "If the last searched regexp included `matlab-string-char-regexp', then find the end of that string."
@@ -757,15 +770,15 @@ This depends on `matlab-string-char-regexp' being used earlier to specify what
 Argument LIMIT is the maximum distance to scan."
   (matlab-font-lock-string-match-here
    (concat matlab-string-start-regexp
-	   "\\(?2:" matlab-string-char-regexp matlab-string-end-regexp "\\)"
-	   "\\([^\\9]\\|$\\)")
+	   "\\('" matlab-string-end-regexp "\\)"
+	   "\\([^']\\|$\\)")
    limit))
 
 (defun matlab-font-lock-string-match-unterminated (limit)
   "When font locking strings, call this function for normal strings.
 Argument LIMIT is the maximum distance to scan."
   (matlab-font-lock-string-match-here
-   (concat matlab-string-start-regexp "\\(?2:" matlab-string-char-regexp matlab-string-content-regexp "\\)$")
+   (concat matlab-string-start-regexp "\\('[^'\n]*\\(''[^'\n]*\\)*\\)$")
    limit))
 
 (defun matlab-font-lock-string-match-here (regex limit)
